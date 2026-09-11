@@ -117,8 +117,6 @@ def compute_tmle_rr(
     Q_star_0_m = float(result.Q_star_0.mean())
     rr = safe_ratio(Q_star_1_m, Q_star_0_m, label="Risk ratio")
 
-    # compute_ci expects the old signed convention, where the control-arm
-    # covariate is negative: A*H1 == w1 and (1-A)*H0 == -w0.
     ci_results = compute_ci(
         effect_type="RR",
         psi=rr,
@@ -127,8 +125,8 @@ def compute_tmle_rr(
         Y=Y,
         A=A,
         Yhat_star=result.Yhat_star,
-        H1=result.w1,
-        H0=-result.w0,
+        w1=result.w1,
+        w0=result.w0,
     )
 
     return {

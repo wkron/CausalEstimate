@@ -12,8 +12,8 @@ def compute_ci(
     A: np.ndarray,
     Yhat_star: np.ndarray,
     H: np.ndarray = None,
-    H1: np.ndarray = None,
-    H0: np.ndarray = None,
+    w1: np.ndarray = None,
+    w0: np.ndarray = None,
     eps: float = 1e-9,
 ) -> dict:
     """
@@ -22,9 +22,14 @@ def compute_ci(
 
     Difference effects (ATE, ATT) use the single combined clever covariate H,
     matching their one-parameter fluctuation. The risk ratio needs the
-    arm-wise H1 and H0 from the two-parameter targeting step, which cannot be
+    arm-wise w1 and w0 from the two-parameter targeting step, which cannot be
     reconstructed from the propensity scores here because clipping is applied
     inside that step (issue #98).
+
+    w1 and w0 are the non-negative, off-arm-zero weights carried by
+    `TargetingResult`; pass them through unchanged. Each arm mean's influence
+    curve uses that arm's own weight with a POSITIVE sign -- it is only the
+    difference covariate H = w1 - w0 that carries the control-arm minus sign.
     """
     n = len(Y)
     if n == 0:
@@ -37,15 +42,15 @@ def compute_ci(
         p_treated = np.mean(A)
         ic = _compute_ic_att(psi, Q_star_1, Q_star_0, Y, A, Yhat_star, H, p_treated)
     elif effect_type == "RR":
-        if H1 is None or H0 is None:
+        if w1 is None or w0 is None:
             raise ValueError(
-                "effect_type 'RR' requires the arm-wise clever covariates H1 "
-                "and H0 from the targeting step."
+                "effect_type 'RR' requires the arm-wise targeting weights w1 "
+                "and w0 from the targeting step."
             )
         mu_1 = Q_star_1.mean()
         mu_0 = Q_star_0.mean()
-        ic_mu1 = _compute_ic_mu(Y, A * H1, Q_star_1, mu_1)
-        ic_mu0 = _compute_ic_mu(Y, (1 - A) * H0, Q_star_0, mu_0)
+        ic_mu1 = _compute_ic_mu(Y, w1, Q_star_1, mu_1)
+        ic_mu0 = _compute_ic_mu(Y, w0, Q_star_0, mu_0)
         ic = _compute_ic_log_ratio(ic_mu1, ic_mu0, mu_1, mu_0, eps)
     else:
         raise ValueError(
@@ -95,6 +100,9 @@ def _compute_ic_mu(
     Influence curve for a single targeted arm mean,
 
         IC_i = w_i (Y_i - Q_i) + (Q_i - mu)
+
+    w is that arm's own non-negative weight, zero off-arm, so no masking by A
+    is needed here and the residual term keeps a positive sign.
 
     The weighted residual is not divided by mean(w): the targeting step has
     already solved this arm's score equation, so the term is centred already.
